@@ -1,21 +1,23 @@
 const express = require('express');
 const cors = require('cors');
 
-// --- THE FIX: Polyfill browser variables for Node.js ---
+// --- CRITICAL FIX: Polyfill for Node.js ---
+// This prevents the "postMessage is not defined" crash
 if (typeof global.postMessage === 'undefined') {
     global.postMessage = (message) => {
-        // This catches internal engine logs that were crashing the server
-        // console.log('Debug:', message); 
+        // This handles internal engine logs silently
     };
 }
-// -------------------------------------------------------
+// ------------------------------------------
 
+// MUST match the name in package.json ('stockfish.js')
 const stockfish = require('stockfish.js');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Difficulty Mapping
 const LEVEL_DEPTHS = {
     5: 8,
     6: 10,
@@ -24,7 +26,7 @@ const LEVEL_DEPTHS = {
 };
 
 app.get('/', (req, res) => {
-    res.send('Falconix Chess Server is Running! ♟️');
+    res.send('Falconix Chess Server is Live! ♟️');
 });
 
 app.post('/api/move', (req, res) => {
@@ -41,11 +43,11 @@ app.post('/api/move', (req, res) => {
         const engine = stockfish();
         let bestMoveFound = false;
 
+        // Listen for messages
         engine.onmessage = function(line) {
             if (bestMoveFound) return;
 
-            // Check for the move in the output string
-            // Output format: "bestmove e2e4 ponder e7e5"
+            // Output format check: "bestmove e2e4 ponder e7e5"
             if (typeof line === 'string' && line.startsWith('bestmove')) {
                 bestMoveFound = true;
                 const parts = line.split(' ');
@@ -53,12 +55,12 @@ app.post('/api/move', (req, res) => {
                 
                 res.json({ move: bestMove });
                 
-                // Clean up to save memory
+                // Quit engine to save RAM
                 engine.postMessage('quit');
             }
         };
 
-        // Send commands to Stockfish
+        // Send commands
         engine.postMessage('uci');
         engine.postMessage(`position fen ${fen}`);
         engine.postMessage(`go depth ${depth}`);
