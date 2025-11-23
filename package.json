@@ -1,7 +1,7 @@
 {
   "name": "falconix-chess-server",
   "version": "1.0.0",
-  "description": "Stockfish Backend for Falconix Gaming",
+  "description": "Stockfish Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
