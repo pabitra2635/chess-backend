@@ -1,16 +1,21 @@
-import express from 'express';
-import cors from 'cors';
-import Stockfish from 'stockfish';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+const express = require('express');
+const cors = require('cors');
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+// --- THE FIX: Polyfill browser variables for Node.js ---
+if (typeof global.postMessage === 'undefined') {
+    global.postMessage = (message) => {
+        // This catches internal engine logs that were crashing the server
+        // console.log('Debug:', message); 
+    };
+}
+// -------------------------------------------------------
+
+const stockfish = require('stockfish.js');
+
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
-// Map levels to Depth
 const LEVEL_DEPTHS = {
     5: 8,
     6: 10,
@@ -22,7 +27,7 @@ app.get('/', (req, res) => {
     res.send('Falconix Chess Server is Running! ♟️');
 });
 
-app.post('/api/move', async (req, res) => {
+app.post('/api/move', (req, res) => {
     const { fen, level } = req.body;
 
     if (!fen || !level) {
@@ -31,34 +36,36 @@ app.post('/api/move', async (req, res) => {
 
     const depth = LEVEL_DEPTHS[level] || 5;
 
-    // Initialize Stockfish
-    // The 'stockfish' package v16+ returns a factory function that returns a promise
     try {
-        const engine = await Stockfish(); 
+        // Initialize engine
+        const engine = stockfish();
         let bestMoveFound = false;
 
-        // Set up listener
-        engine.addMessageListener((line) => {
+        engine.onmessage = function(line) {
             if (bestMoveFound) return;
 
-            if (line.startsWith('bestmove')) {
+            // Check for the move in the output string
+            // Output format: "bestmove e2e4 ponder e7e5"
+            if (typeof line === 'string' && line.startsWith('bestmove')) {
                 bestMoveFound = true;
                 const parts = line.split(' ');
                 const bestMove = parts[1];
                 
                 res.json({ move: bestMove });
-                engine.quit(); // Important to kill the process
+                
+                // Clean up to save memory
+                engine.postMessage('quit');
             }
-        });
+        };
 
-        // Send commands
+        // Send commands to Stockfish
         engine.postMessage('uci');
         engine.postMessage(`position fen ${fen}`);
         engine.postMessage(`go depth ${depth}`);
 
-    } catch (err) {
-        console.error("Stockfish Init Error:", err);
-        res.status(500).json({ error: "Engine failed to start" });
+    } catch (error) {
+        console.error("Engine Error:", error);
+        res.status(500).json({ error: "AI Engine Failed to Start" });
     }
 });
 
