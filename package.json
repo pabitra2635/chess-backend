@@ -12,6 +12,6 @@
     "stockfish.js": "^10.0.2"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": "20.x"
   }
 }
