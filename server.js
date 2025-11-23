@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-// CHANGED: We now require 'stockfish.js' instead of 'stockfish'
 const stockfish = require('stockfish.js');
 
 const app = express();
@@ -27,31 +26,38 @@ app.post('/api/move', (req, res) => {
 
     const depth = LEVEL_DEPTHS[level] || 5;
     
-    // CHANGED: stockfish.js is initialized strictly as a function
-    const engine = stockfish();
-    let bestMoveFound = false;
+    try {
+        // Initialize engine
+        const engine = stockfish();
+        let bestMoveFound = false;
 
-    engine.onmessage = function(line) {
-        if (bestMoveFound) return;
+        engine.onmessage = function(line) {
+            if (bestMoveFound) return;
 
-        // Log for debugging on Render Dashboard
-        console.log(`Engine: ${line}`);
+            // console.log(line); // Uncomment for debugging only
 
-        if (line.startsWith('bestmove')) {
-            bestMoveFound = true;
-            const bestMove = line.split(' ')[1];
-            res.json({ move: bestMove });
-            engine.postMessage('quit');
-        }
-    };
+            if (line.startsWith('bestmove')) {
+                bestMoveFound = true;
+                const bestMove = line.split(' ')[1];
+                res.json({ move: bestMove });
+                
+                // Clean up
+                engine.postMessage('quit');
+            }
+        };
 
-    // Send commands
-    engine.postMessage('uci');
-    engine.postMessage(`position fen ${fen}`);
-    engine.postMessage(`go depth ${depth}`);
+        // Send commands
+        engine.postMessage('uci');
+        engine.postMessage(`position fen ${fen}`);
+        engine.postMessage(`go depth ${depth}`);
+
+    } catch (error) {
+        console.error("Engine Error:", error);
+        res.status(500).json({ error: "AI Engine Failed" });
+    }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000; // Render usually uses 10000
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
