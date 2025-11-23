@@ -1,23 +1,28 @@
-const express = require('express');
-const cors = require('cors');
-const stockfish = require('stockfish.js');
+import express from 'express';
+import cors from 'cors';
+import Stockfish from 'stockfish';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(cors()); 
+
+app.use(cors());
 app.use(express.json());
 
+// Map levels to Depth
 const LEVEL_DEPTHS = {
-    5: 8,   
-    6: 10,  
-    7: 12,  
-    8: 15   
+    5: 8,
+    6: 10,
+    7: 12,
+    8: 15
 };
 
 app.get('/', (req, res) => {
     res.send('Falconix Chess Server is Running! ♟️');
 });
 
-app.post('/api/move', (req, res) => {
+app.post('/api/move', async (req, res) => {
     const { fen, level } = req.body;
 
     if (!fen || !level) {
@@ -25,39 +30,39 @@ app.post('/api/move', (req, res) => {
     }
 
     const depth = LEVEL_DEPTHS[level] || 5;
-    
+
+    // Initialize Stockfish
+    // The 'stockfish' package v16+ returns a factory function that returns a promise
     try {
-        // Initialize engine
-        const engine = stockfish();
+        const engine = await Stockfish(); 
         let bestMoveFound = false;
 
-        engine.onmessage = function(line) {
+        // Set up listener
+        engine.addMessageListener((line) => {
             if (bestMoveFound) return;
-
-            // console.log(line); // Uncomment for debugging only
 
             if (line.startsWith('bestmove')) {
                 bestMoveFound = true;
-                const bestMove = line.split(' ')[1];
-                res.json({ move: bestMove });
+                const parts = line.split(' ');
+                const bestMove = parts[1];
                 
-                // Clean up
-                engine.postMessage('quit');
+                res.json({ move: bestMove });
+                engine.quit(); // Important to kill the process
             }
-        };
+        });
 
         // Send commands
         engine.postMessage('uci');
         engine.postMessage(`position fen ${fen}`);
         engine.postMessage(`go depth ${depth}`);
 
-    } catch (error) {
-        console.error("Engine Error:", error);
-        res.status(500).json({ error: "AI Engine Failed" });
+    } catch (err) {
+        console.error("Stockfish Init Error:", err);
+        res.status(500).json({ error: "Engine failed to start" });
     }
 });
 
-const PORT = process.env.PORT || 10000; // Render usually uses 10000
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
